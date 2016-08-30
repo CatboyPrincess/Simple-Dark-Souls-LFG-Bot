@@ -8,7 +8,7 @@ Any guides that follow are written for people who are who have a level of comput
 
 ## License
 
-lol idk :')
+See the file `LICENSE`.
 
 ## Commands
 
