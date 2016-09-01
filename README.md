@@ -40,23 +40,17 @@ The `!ADMIN_xyz` commands are available to people in roles that are flagged with
 
 ## Installing
 
-First, you'll want to install the latest version of [Python 3][py] for your platform. At the time of writing it is 3.5.2.
+First, you'll want to install the latest version of [Python 3][py] for your platform. At the time of writing it is 3.5.2. When you go to install it, make sure to mark the option "Add Python 3.5 to PATH".
 
 Now, follow instructions in the `README.md` for [discord.py][discord_py].
 
 You don't need voice so this should suffice (from the link):
 
 ```
-python3 -m pip install -U discord.py
-```
-
-For me, this worked without a hitch:
-
-```
 py -3 -m pip install -U discord.py
 ```
 
-These require Python's directory to be on your PATH. It is not too hard to fulfill this assumption with help from the Internet so I'll move on.
+This requires Python's directory to be on your PATH in your system environment variables.
 
 Download and save `Simple-Dark-Souls-LFG-Bot.py` and `start_bot.bat` to some place.
 
