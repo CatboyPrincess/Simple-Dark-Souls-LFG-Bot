@@ -12,8 +12,8 @@ import traceback
 # response type: code
 
 description = """I am a simple looking-for-game bot for Soulsborne games.
-    Version 1.0.1, released 2016-09-30
-    By Gwyndolin-chan (hydra-chan @ github), 2016-09-30
+    Version 1.0.2, released 2016-09-06
+    By Gwyndolin-chan (hydra-chan @ github), 2016-08-30
     """
 cmd_prefix = '~'
 bot = commands.Bot(command_prefix=cmd_prefix, description=description)
@@ -160,10 +160,11 @@ async def list(ctx):
     #while lock_RequestList:
     #    pass
     lock_RequestList = True
-    s = '--- Players seeking games in the last hour ---'
+    tc = datetime.utcnow() # current time
     spaces = 18
     spaces_sl_sm = int(spaces / 2)
     spaces_timestamp = 16
+    s = '--- Players seeking games in the last hour (current time: ' + str(tc)[:spaces_timestamp] + ' UTC) ---'
     s = s + '\n```'
     s = s + ' | '.join(('Player'.ljust(spaces)[:spaces], 'Time (UTC)'.ljust(spaces)[:spaces_timestamp], 'Game'.ljust(spaces)[:spaces], 'Platform'.ljust(spaces)[:spaces], 'SL/SM'.ljust(spaces_sl_sm)[:spaces_sl_sm], 'Note'.ljust(spaces)[:spaces]))
     tmp = []
@@ -174,9 +175,7 @@ async def list(ctx):
     s = s + '\n' + '-+-'.join(tmp)
     RequestList_new = []
     for e in RequestList:
-        t0 = e.message.timestamp # request time
-        t1 = datetime.utcnow() # current time
-        td = t1 - t0 # time difference
+        td = tc - e.message.timestamp # time difference
         # if time difference is within an hour the request will be preserved
         # otherwise it is skipped and excluded from the reformed list
         if td.total_seconds() <= 3600:
@@ -205,9 +204,7 @@ async def clear(ctx):
     RequestList_new = []
     for e in RequestList:
         to_add = True
-        t0 = e.message.timestamp # request time
-        t1 = datetime.utcnow() # current time
-        td = t1 - t0 # time difference
+        td = datetime.utcnow() - e.message.timestamp # time difference
         if (e.message.author.id == ctx.message.author.id
             or td.total_seconds() > 3600): # exclude stale requests
             to_add = False
