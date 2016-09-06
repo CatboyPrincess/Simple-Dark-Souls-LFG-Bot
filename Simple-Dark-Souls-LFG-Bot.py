@@ -12,10 +12,11 @@ import traceback
 # response type: code
 
 description = """I am a simple looking-for-game bot for Soulsborne games.
-    Version 1.0.0, released 2016-09-30
+    Version 1.0.1, released 2016-09-30
     By Gwyndolin-chan (hydra-chan @ github), 2016-09-30
     """
-bot = commands.Bot(command_prefix='!', description=description)
+cmd_prefix = '~'
+bot = commands.Bot(command_prefix=cmd_prefix, description=description)
 
 # bot_token: substitute the text for the bot's token. DO NOT SHARE.
 bot_token = 'text'
@@ -23,7 +24,7 @@ bot_token = 'text'
 
 ADMIN_bot_enabled = True # Lock for public functions of the bot
 
-# A Request has the Message used for the !request command. Extended with details of the request
+# A Request has the Message used for the request command. Extended with details of the request
 class Request:
     def __init__(self, message, game, platform, sl_sm, note=''):
         self.message = message
@@ -87,13 +88,13 @@ async def on_command_error(error, ctx):
     elif isinstance(error, commands.DisabledCommand):
         await ERROR_output(ctx, 'This command is disabled and cannot be used.')
     elif isinstance(error, commands.CommandNotFound):
-        await ERROR_output(ctx, 'That command was not found. Type !help if you need help.')
+        await ERROR_output(ctx, 'That command was not found. Type ' + cmd_prefix + 'help if you need help.')
     elif isinstance(error, commands.CommandInvokeError):
         print('In {0.command.qualified_name}:'.format(ctx), file=sys.stderr)
         traceback.print_tb(error.original.__traceback__)
         print('{0.__class__.__name__}: {0}'.format(error.original), file=sys.stderr)
     elif isinstance(error, commands.errors.MissingRequiredArgument):
-        await ERROR_output(ctx, '{0.__name__}: {1} (try: !help {2})'.format(commands.errors.MissingRequiredArgument, error, ctx.message.content.split()[0][1:]))
+        await ERROR_output(ctx, '{0.__name__}: {1} (try: ' + cmd_prefix + 'help {2})'.format(commands.errors.MissingRequiredArgument, error, ctx.message.content.split()[0][1:]))
     else:
         print('Ignoring exception in command "{}"'.format(ctx.command), file=sys.stderr)
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
