@@ -12,7 +12,7 @@ import traceback
 # response type: code
 
 description = """I am a simple looking-for-game bot for Soulsborne games.
-    Version 1.0.2, released 2016-09-06
+    Version 1.1.0, released 2016-09-10
     By Gwyndolin-chan (hydra-chan @ github), 2016-08-30
     """
 cmd_prefix = '~'
@@ -21,8 +21,6 @@ bot = commands.Bot(command_prefix=cmd_prefix, description=description)
 # bot_token: substitute the text for the bot's token. DO NOT SHARE.
 bot_token = 'text'
 # EXAMPLE: bot_token = '01234.some.example.token.56789'
-
-ADMIN_bot_enabled = True # Lock for public functions of the bot
 
 # A Request has the Message used for the request command. Extended with details of the request
 class Request:
@@ -35,7 +33,7 @@ class Request:
 
 # Players are stored as a list.
 RequestList = []
-lock_RequestList = False
+#lock_RequestList = False # not implemented
 RequestList_max_size = 100
 
 max_note_length = 100
@@ -98,20 +96,46 @@ async def on_command_error(error, ctx):
     else:
         print('Ignoring exception in command "{}"'.format(ctx.command), file=sys.stderr)
         traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+        
+def clear_requests(stale=False, duplicate_author='', remove_all=False):
+    """Clears requests based on parameters.
+    
+    stale: if True then stale requests are removed.
+    duplicate_author: if non-empty string then requests with a matching message.author.id field are removed
+    all: if True then all requests are removed."""
+    global RequestList
+    RequestList_new = []
+    if remove_all: # Remove all requests
+        RequestList = RequestList_new
+        return
+    # if "remove_all" is not specified
+    for e in RequestList:
+        td = datetime.utcnow() - e.message.timestamp # time difference
+        if stale and td.total_seconds() > 3600: # exclude stale requests
+            continue
+        if len(duplicate_author) > 0 and duplicate_author == e.message.author.id: # exclude matching ids
+            continue
+        # include request in new list if checks pass
+        RequestList_new.append(e)
+    RequestList = RequestList_new
 
 @bot.command(pass_context=True)
 async def request(ctx, game : str, platform : str, sl_sm : str, note=''):
-    """
-    Add yourself to the game request list for one hour
+    """Add yourself to the game request list for one hour
     
     Valid words for <game>: des, ds1, ds1og, ds2, ds2og, ds3, bb
     Valid words for <platform>: pc, ps3, ps4, xb360, xb1, xbo
     For <sl_sm> type your Soul Level, Soul Memory, or one word: ex. '120' or '30mil'
-    Optional: [note] that is limited in length. A good place to put 'coop' or 'pvp' or 'Gwyndolin #1 waifu'
+    Optional: [note] that is limited in length. A good place to put 'coop' or 'pvp' or 'Gwyndolin <3'
     
-    Please refrain from impossible combinations like Demon's Souls on XBox One.
+    --- Examples without command prefix ---
+    request ds3 pc 120 pvp
+    request ds1 ps3 69 I love Gwyndolin
+    request ds2 xbo 50mil high Soul Memory coop!
+    
+    Please refrain from impossible combinations like "Demon's Souls on XBox One".
     """
-    if not ADMIN_bot_enabled:
+    if not cog_Admin.ADMIN_bot_enabled:
         return
     global RequestList, lock_RequestList
     # Check for errors in arguments
@@ -133,18 +157,15 @@ async def request(ctx, game : str, platform : str, sl_sm : str, note=''):
         errors = errors + 1
         s = s + 'Request list is already at capacity (' + str(RequestList_max_size) + ')' + '\n'
     if errors > 0:
+        # some errors exist, therefore do not add the request
         s = s + 'Due to one or more errors, your request has not been posted.'
         await ERROR_output(ctx, s)
     else:
-        # no errors, add a new request
+        # no errors exist, therefore add a new request
         #while lock_RequestList:
         #    pass
         # remove dupes first
-        RequestList_new = []
-        for e in RequestList:
-            if e.message.author.id != ctx.message.author.id:
-                RequestList_new.append(e)
-        RequestList = RequestList_new
+        clear_requests(stale=True, duplicate_author=ctx.message.author.id)
         # add new request
         RequestList.append(Request(ctx.message, game, platform, sl_sm, note[:max_note_length]))
         name = str(ctx.message.author.name) + '#' + str(ctx.message.author.discriminator)
@@ -154,17 +175,17 @@ async def request(ctx, game : str, platform : str, sl_sm : str, note=''):
 @bot.command(pass_context=True)
 async def list(ctx):
     """List players of the past hour (and remove older ones)"""
-    if not ADMIN_bot_enabled:
+    if not cog_Admin.ADMIN_bot_enabled:
         return
-    global lock_RequestList, RequestList
+    global lock_RequestList
     #while lock_RequestList:
     #    pass
-    lock_RequestList = True
+    #lock_RequestList = True
     tc = datetime.utcnow() # current time
     spaces = 18
     spaces_sl_sm = int(spaces / 2)
     spaces_timestamp = 16
-    s = '--- Players seeking games in the last hour (current time: ' + str(tc)[:spaces_timestamp] + ' UTC) ---'
+    s = '--- Players seeking games in the last hour (current time: ' + str(tc)[:spaces_timestamp] + ' UTC) ' + str(len(RequestList)) + '/' + str(RequestList_max_size) + ' requests. ---'
     s = s + '\n```'
     s = s + ' | '.join(('Player'.ljust(spaces)[:spaces], 'Time (UTC)'.ljust(spaces)[:spaces_timestamp], 'Game'.ljust(spaces)[:spaces], 'Platform'.ljust(spaces)[:spaces], 'SL/SM'.ljust(spaces_sl_sm)[:spaces_sl_sm], 'Note'.ljust(spaces)[:spaces]))
     tmp = []
@@ -173,83 +194,89 @@ async def list(ctx):
     tmp[1] = '-' * spaces_timestamp
     tmp[4] = '-' * spaces_sl_sm
     s = s + '\n' + '-+-'.join(tmp)
-    RequestList_new = []
+    clear_requests(stale=True) # clear stale requests
     for e in RequestList:
-        td = tc - e.message.timestamp # time difference
-        # if time difference is within an hour the request will be preserved
-        # otherwise it is skipped and excluded from the reformed list
-        if td.total_seconds() <= 3600:
-            s_note = e.note
-            if len(s_note) > spaces:
-                s_note = 'XL note: ' + s_note
-            s_row = ' | '.join((e.message.author.name.ljust(spaces)[:spaces], str(e.message.timestamp).ljust(spaces)[:spaces_timestamp], GameMap[e.game].ljust(spaces)[:spaces], PlatformMap[e.platform].ljust(spaces)[:spaces], e.sl_sm.ljust(spaces_sl_sm)[:spaces_sl_sm], s_note.ljust(spaces)))
-            s = s + '\n' + s_row
-            RequestList_new.append(e)
-    RequestList = RequestList_new
-    lock_RequestList = False
-    s = s + '```--- End of games list ---'
+        s_note = e.note
+        if len(s_note) > spaces: # extra long note (may extend to a new row)
+            s_note = 'XL note: ' + s_note
+        s_row = ' | '.join((e.message.author.name.ljust(spaces)[:spaces], str(e.message.timestamp).ljust(spaces)[:spaces_timestamp], GameMap[e.game].ljust(spaces)[:spaces], PlatformMap[e.platform].ljust(spaces)[:spaces], e.sl_sm.ljust(spaces_sl_sm)[:spaces_sl_sm], s_note.ljust(spaces)))
+        s = s + '\n' + s_row
+    #lock_RequestList = False
+    s = s + '```--- End of games list. ---'
     if len(RequestList) == 0:
-        s = '--- No players have sought games in the past hour ---'
-    if len(RequestList) > 10:
+        s = '--- No players have sought games in the past hour. ---'
+    if len(RequestList) > 10: # direct message large lists
         await bot.send_message(ctx.message.author, s)
-    else:
+    else: # message to channel small lists
         await bot.say(s)
     
 @bot.command(pass_context=True)
 async def clear(ctx):
-    """Clears requests made by you. Also removes stale requests"""
-    if not ADMIN_bot_enabled:
+    """Clears requests made by you. Also removes stale requests."""
+    if not cog_Admin.ADMIN_bot_enabled:
         return
-    global RequestList
-    RequestList_new = []
-    for e in RequestList:
-        to_add = True
-        td = datetime.utcnow() - e.message.timestamp # time difference
-        if (e.message.author.id == ctx.message.author.id
-            or td.total_seconds() > 3600): # exclude stale requests
-            to_add = False
-        if to_add:
-            RequestList_new.append(e)
-    RequestList = RequestList_new
+    clear_requests(remove_all=True)
     s = ctx.message.author.name + ', your requests and all stale requests have been removed.'
     await bot.say(s)
 
 @bot.command(pass_context=True)
 async def status(ctx):
-    """Reports if the bot is enabled or not and other info"""
+    """Reports if the bot is enabled or not and other info."""
     s = 'enabled'
-    if not ADMIN_bot_enabled:
+    if not cog_Admin.ADMIN_bot_enabled:
         s = 'disabled'
-    await bot.say('--- My functions are currently ' + s + '. ' + str(len(RequestList)) + '/' + str(RequestList_max_size) + ' requests in use ---')
+    await bot.say('--- My functions are currently ' + s + '. ' + str(len(RequestList)) + '/' + str(RequestList_max_size) + ' requests in use. ---')
+    
+# Commands prefixed with "A_" require that "test_admin()" returns True
 
-def test_admin(server, user):
-    """Returns true if the user has Administration flag set on the server"""
-    permissions = server.default_channel.permissions_for(user)
-    return permissions.administrator or permissions.manage_server
+class Admin:
+    """Bot admin commands.
     
-# Commands prefixed with "ADMIN_" require that "test_admin()" returns True
+    Requires that the user have bot admin privileges.
+    """
     
-@bot.command(pass_context=True)
-async def ADMIN_logout(ctx):
-    """Logs the bot out"""
-    if test_admin(ctx.message.server, ctx.message.author):
+    ADMIN_bot_enabled = True # Lock for public functions of the bot
+    
+    def __init__(self, bot):
+        self.bot = bot
+
+    def test_admin(self, server, user):
+        """Returns true if the user is considered an admin for the bot in the context of a server"""
+        permissions = server.default_channel.permissions_for(user)
+        return permissions.administrator or permissions.manage_server
+        
+    @commands.command(pass_context=True)
+    async def A_clear(self, ctx):
+        """Clears the whole request list."""
+        clear_requests(remove_all=True)
+        await bot.say('--- ADMIN: The whole request list has been cleared. ---')
+        
+    @commands.command(pass_context=True)
+    async def A_logout(self, ctx):
+        """Logs the bot out."""
+        if not self.test_admin(ctx.message.server, ctx.message.author):
+            return    
         await bot.say('--- ADMIN: Logging out now. ---')
         await bot.logout()
-        
-@bot.command(pass_context=True)
-async def ADMIN_enable(ctx):
-    """Enables bot's public functions"""
-    global ADMIN_bot_enabled
-    if test_admin(ctx.message.server, ctx.message.author):
-        ADMIN_bot_enabled = True
+            
+    @commands.command(pass_context=True)
+    async def A_enable(self, ctx):
+        """Enables bot's public functions."""
+        if not self.test_admin(ctx.message.server, ctx.message.author):
+            return
+        self.ADMIN_bot_enabled = True
         await bot.say('--- ADMIN: My functions are now enabled. ---')
-        
-@bot.command(pass_context=True)
-async def ADMIN_disable(ctx):
-    """Disables bot's public functions"""
-    global ADMIN_bot_enabled
-    if test_admin(ctx.message.server, ctx.message.author):
-        ADMIN_bot_enabled = False
+            
+    @commands.command(pass_context=True)
+    async def A_disable(self, ctx):
+        """Disables bot's public functions."""
+        if not self.test_admin(ctx.message.server, ctx.message.author):
+            return
+        self.ADMIN_bot_enabled = False
         await bot.say('--- ADMIN: My functions are now disabled. ---')
+        
+cog_Admin = Admin(bot)
+
+bot.add_cog(cog_Admin)
 
 bot.run(bot_token)
